@@ -1,0 +1,124 @@
+###################################################################
+######################-- 1. INITIALIZATION --######################
+###################################################################
+
+units             real
+atom_style        full
+dimension         3
+boundary          p p p
+pair_style        lj/cut/tip4p/long  4 5 4 7 0.1250 9.0
+pair_modify       tail              yes
+kspace_style      pppm/tip4p        1.0e-5
+bond_style        harmonic
+angle_style       harmonic
+dihedral_style    fourier
+improper_style    none
+read_data         ./lammps_output_NPT5_w1H2O_s5.dat
+
+###################################################################
+########################-- 2. FORCE FIELD --#######################
+###################################################################
+
+bond_coeff      1    320.00      1.410
+bond_coeff      2    268.00      1.529
+bond_coeff      3    367.00      1.332
+bond_coeff      4      0.00      0.9572
+angle_coeff     1     60.00      109.5
+angle_coeff     2     92.60      111.5
+angle_coeff     3     50.00      109.5
+angle_coeff     4     77.00      109.1
+angle_coeff     5     50.00      109.5
+angle_coeff     6     58.35      112.7
+angle_coeff     7      0.00      104.52
+dihedral_coeff  1 5  -2.9064 0   0.0   0.0000 1   0.0   0.0000 2   0.0   0.8688 3  62.0   3.0176 4  83.0  #F-C-O-C 
+dihedral_coeff  2 5   0.0000 0   0.0  22.0929 1 -14.0   0.0000 2   0.0   4.2412 3 -93.0  -4.8742 4 275.0  #C-C-O-C 
+dihedral_coeff  3 5   0.0000 0   0.0   0.0000 1   0.0   0.0000 2   0.0   0.8958 3   0.0   0.0000 4   0.0  #O-C-C-F 
+dihedral_coeff  4 5   2.4846 0   0.0   0.0000 1   0.0  -0.9598 2   0.0  -0.3624 3   0.0   0.0000 4   0.0  #O-C-C-O 
+dihedral_coeff  5 5   1.9075 0   0.0   0.0000 1   0.0  -0.8658 2 347.0   0.8659 3  33.0   0.0000 4   0.0  #O-C-C-C 
+dihedral_coeff  6 5   0.0000 0   0.0  -1.2500 1   0.0   0.0000 2 180.0   0.1250 3   0.0   0.0000 4 180.0  #F-C-C-F 
+dihedral_coeff  7 5   0.0000 0   0.0   0.1500 1   0.0   0.0000 2 180.0   0.2000 3   0.0   0.0000 4 180.0  #C-C-C-F 
+pair_coeff  1  1  0.152   2.790   9   #epsilon, sigma, cutoff for all elements
+pair_coeff  2  2  0.066   3.500   9   #epsilon, sigma, cutoff for all elements
+pair_coeff  3  3  0.053   2.950   9   #epsilon, sigma, cutoff for all elements
+pair_coeff  1  2  0.100   3.125   9   #epsilon, sigma, cutoff for all elements
+pair_coeff  1  3  0.090   2.869   9   #epsilon, sigma, cutoff for all elements
+pair_coeff  2  3  0.059   3.213   9   #epsilon, sigma, cutoff for all elements
+pair_coeff  4  4  0.16275 3.16435 9   #epsilon, sigma, cutoff for O water-O water
+pair_coeff  1  4  0.15728 2.97129 9   #epsilon, sigma, cutoff for F-O water
+pair_coeff  2  4  0.10364 3.32795 9   #epsilon, sigma, cutoff for C-O water
+pair_coeff  3  4  0.09287 3.05530 9   #epsilon, sigma, cutoff for O-O water
+pair_coeff  *  5  0.0     0.0     9   #H water
+neighbor 2.0 bin
+neigh_modify delay 0 every 1 check yes one 500000 page 5000000
+
+###################################################################
+#######################-- 3. ID-GROUPS --##########################
+###################################################################
+
+group Carbon type 2
+group FixedKry molecule 1 2 6 14 16 17 22 24 27
+group waterOH type 4 5
+group waterO type 4
+group waterH type 5
+group water1 molecule 28
+###################################################################
+##################-- 4. UNIT CELL OPTIMIZATION --##################
+###################################################################
+
+###################################################################
+#################-- 5. ATOMIC AND CELL RELAXATION --###############
+###################################################################
+
+###################################################################
+###################-- 6. RUNNING CALCULATIONS  --##################
+###################################################################
+
+compute       1   Carbon   msd com yes
+compute       2   waterOH  msd com yes
+compute       3   waterO   msd com yes
+compute       4   waterH   msd com yes
+compute       5   water1   msd com yes
+thermo_style  custom step time temp vol lx ly lz press ke pe etotal enthalpy density c_1[4] c_2[4] c_3[4] c_4[4] c_5[4]
+thermo        1000
+compute       myrdf   Carbon      rdf   100     2   2
+compute       rdf_w   waterOH     rdf   100     1   1
+compute       rdf_O   waterO      rdf   100     1   1
+compute       rdf_H   waterH      rdf   100     1   1
+dump          1 waterOH custom 10000 ./Coord_prep/Dump_system_* id mol type x y z vx vy vz fx fy fz ix iy iz
+dump_modify   1 pad 8
+#fix           1 all ave/time 1 250 1000  c_myrdf[*] file RDF/lammps_rdf mode vector
+
+#fix           2 all ave/time 1 250  250  c_rdf_w[*] file RDF_H2O/lammps_RDF_waterOH mode vector
+#fix           3 all ave/time 1 250  250  c_rdf_O[*] file RDF_H2O_O/lammps_RDF_waterO mode vector
+#fix           4 all ave/time 1 250  250  c_rdf_O[*] file RDF_H2O_H/lammps_RDF_waterH mode vector
+
+#------Running-----
+fix          simigel FixedKry spring/self 1000.0 xyz
+timestep     0.5
+fix          1 all shake 0.0001 20 0 b 4 a 7
+fix          2 all nvt temp 298.0 298.0 $(100.0*dt) #iso 1.0 1.0 $(1000.0*dt)
+run          20000
+unfix        1
+unfix        2
+timestep     2
+fix          3 all shake 0.0001 20 0 b 4 a 7
+fix          4 all nvt temp 298.0 298.0 $(100.0*dt) #iso 1.0 1.0 $(1000.0*dt)
+run          1000000
+unfix        3
+unfix        4
+###################################################################
+########################-- 7. 2nd RUN --###########################
+###################################################################
+
+###################################################################
+##############- 8. VARIABLES : DECLARATION and PRINT --############
+###################################################################
+
+variable natoms equal "count(all)"
+variable totenergy equal "pe"
+variable length equal "lx"
+
+#print "Total energy (eV) = ${totenergy}"
+#print "Number of atoms = ${natoms}"
+#print "Lattice constant (Angstoms) = ${length}"
+write_data lammps_output_NVT6_w1H2O_s5.dat
